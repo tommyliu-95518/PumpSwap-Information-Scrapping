@@ -1,6 +1,10 @@
 # parse.py
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -13,6 +17,7 @@ class Trade:
     quote_mint: Optional[str] = None
     quote_delta: Optional[float] = None
     price: Optional[float] = None  # quote units per base token
+
 
 PUMPSWAP_PROGRAM_ID = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA"
 # Known PumpSwap program IDs (expandable list). Milestone 2 will use these to
@@ -71,7 +76,7 @@ def extract_trade_from_tx(
     MVP: Treat any change in total ui amount for this mint in the tx as "volume".
     Later we will filter to PumpSwap-only + compute quote side.
     """
-    print("😁extract_trade_from_tx😁")
+    logger.debug("extract_trade_from_tx called")
 
     if not tx:
         return None
@@ -97,8 +102,8 @@ def extract_trade_from_tx(
     if not pre_map and not post_map:
         return None
 
-    print(f"💎parse/extract_trade_from_tx/pre_map : `{pre_map}`")
-    print(f"💎parse/extract_trade_from_tx/post_map : `{post_map}`")
+    logger.debug("parse/extract_trade_from_tx pre_map: %s", pre_map)
+    logger.debug("parse/extract_trade_from_tx post_map: %s", post_map)
 
     # Compute deltas per mint
     all_mints = set(pre_map.keys()) | set(post_map.keys())

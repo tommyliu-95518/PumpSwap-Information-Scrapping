@@ -3,6 +3,15 @@ from typing import Iterable, Dict, Optional
 import time
 from parse import Trade
 
+# Common stablecoin mint addresses on Solana (treat these quote tokens as USD-equivalent)
+# Add more mints here if needed.
+STABLECOIN_MINTS = {
+    # USDC
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    # USDT (commonly used)
+    "Es9vMFrzaCERmJfr4S7f1KkGm8e7c9g2p2u7r2z1r5t",
+}
+
 WINDOWS = {
     "1m": 60,
     "5m": 5 * 60,
@@ -13,12 +22,15 @@ WINDOWS = {
 def compute_volumes(
     trades: Iterable[Trade],
     now: Optional[int] = None,
-) -> Dict[str, float]:
+    return_usd: bool = False,
+) -> Dict[str, float] | Dict[str, Dict[str, float]]:
     """
-    Simple definition: sum of |token_delta| in each time window.
+    Compute rolling volumes for each window.
+    Returns mapping: {window: {"token": float, "usd": float}}
     """
     now = now or int(time.time())
-    vols: Dict[str, float] = {k: 0.0 for k in WINDOWS}
+    vols_token: Dict[str, float] = {k: 0.0 for k in WINDOWS}
+    vols_usd: Dict[str, Dict[str, float]] = {k: {"token": 0.0, "usd": 0.0} for k in WINDOWS}
     for t in trades:
         age = now - t.ts
         if age < 0:
@@ -26,8 +38,16 @@ def compute_volumes(
             continue
         for label, secs in WINDOWS.items():
             if age <= secs:
-                vols[label] += abs(t.token_delta)
-    return vols
+                token_amt = abs(t.token_delta)
+                vols_token[label] += token_amt
+                # If trade price available and quote is a stablecoin, treat price as USD
+                if t.price is not None and t.quote_mint in STABLECOIN_MINTS:
+                    try:
+                        vols_usd[label]["token"] += token_amt
+                        vols_usd[label]["usd"] += token_amt * abs(t.price)
+                    except Exception:
+                        continue
+    return vols_usd if return_usd else vols_token
 
 
 def compute_age_seconds(

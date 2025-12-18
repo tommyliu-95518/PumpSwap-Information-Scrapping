@@ -4,3 +4,7 @@ pytest
 # Dev tools (optional): ruff, mypy
 # ruff
 # mypy
+ # No extra deps for metadata decoding (uses stdlib + solders/solana already present)
+fastapi
+uvicorn
+websockets

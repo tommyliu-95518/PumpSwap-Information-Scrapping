@@ -1,5 +1,5 @@
 import sqlite3
-from typing import Optional, List
+from typing import Optional, List, Dict
 from parse import Trade
 import json
 
@@ -114,3 +114,59 @@ def get_trades_for_mint(conn_or_path, mint: str, since_ts: Optional[int] = None)
     if close_conn:
         conn.close()
     return trades
+
+
+# Rolling windows (seconds) used by metrics
+WINDOWS = {
+    "1m": 60,
+    "5m": 5 * 60,
+    "15m": 15 * 60,
+    "1h": 60 * 60,
+}
+
+
+def compute_volumes_sql(conn_or_path, mint: str, now_ts: Optional[int] = None, return_usd: bool = False) -> Dict[str, float] | Dict[str, Dict[str, float]]:
+    """Compute rolling volumes for `mint` using SQL aggregation on stored trades.
+
+    Returns dict mapping window label to sum(abs(token_delta)).
+    """
+    close_conn = False
+    if isinstance(conn_or_path, str):
+        conn = init_db(conn_or_path)
+        close_conn = True
+    else:
+        conn = conn_or_path
+
+    now = int(now_ts or __import__("time").time())
+    res = {}
+    cur = conn.cursor()
+    # Return token + USD volumes per window. Use stored `price` and `quote_mint`
+    from metrics import STABLECOIN_MINTS
+
+    for label, secs in WINDOWS.items():
+        since = now - secs
+        rows = cur.execute(
+            "SELECT token_delta, price, quote_mint FROM trades WHERE mint = ? AND ts >= ?",
+            (mint, since),
+        ).fetchall()
+        token_total = 0.0
+        usd_total = 0.0
+        for (td, price, quote_mint) in rows:
+            try:
+                token_amt = abs(float(td))
+            except Exception:
+                continue
+            token_total += token_amt
+            if price is not None and quote_mint in STABLECOIN_MINTS:
+                try:
+                    usd_total += token_amt * abs(float(price))
+                except Exception:
+                    pass
+        if return_usd:
+            res[label] = {"token": token_total, "usd": usd_total}
+        else:
+            res[label] = token_total
+
+    if close_conn:
+        conn.close()
+    return res
