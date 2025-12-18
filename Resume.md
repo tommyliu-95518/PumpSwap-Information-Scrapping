@@ -1,0 +1,7 @@
+`This project builds an on-chain analytics system for PumpSwap tokens on Solana using only smart-contract and transaction data. It fetches and computes token metrics such as market cap, rolling volume (1m, 5m, 15m, 1h), token name, token age, and the token contract address (mint) without relying on third-party analytics APIs like Birdeye or Bitquery.`
+
+`The system works by pulling raw transaction data from Solana RPC, detecting PumpSwap swap activity, extracting token and quote-asset balance deltas, and aggregating trades into rolling time windows. Token supply is read directly from the SPL Mint account, and token name/symbol are fetched from on-chain Metaplex metadata when available. Market cap is computed from on-chain price and total supply, with an optional extension to compute USD market cap using an on-chain oracle (e.g., Pyth) while still avoiding external APIs.`
+
+`Tech Stack: Python, Solana RPC (HTTP/WebSocket), SPL Token program, PumpSwap/Pump.fun programs, Metaplex Token Metadata program. Optional storage includes SQLite/PostgreSQL for persistence and faster aggregation.`
+
+`Key outputs include token identity (name/symbol), token age (since first PumpSwap trade), rolling volumes over 1m/5m/15m/1h windows, last trade price, market cap (SOL-based and optionally USD), and the token mint address. The project is designed to be transparent and verifiable by deriving all metrics directly from on-chain data.`
