@@ -4,6 +4,9 @@ import logging
 
 from config import PYTH_PRICE_ACCOUNTS
 from rpc import get_price_for_mint
+import pyth_parser
+from base64 import b64decode
+from solders.pubkey import Pubkey
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,37 @@ class PriceCache:
                         p = get_price_for_mint(self.client, mint)
                         if p is not None:
                             self.set(mint, float(p))
+                            continue
+
+                        # If RPC wrapper didn't return a price, attempt direct
+                        # account read + pure-Python parse as a fallback.
+                        acct = PYTH_PRICE_ACCOUNTS.get(mint)
+                        if acct:
+                            try:
+                                resp = self.client.get_account_info(Pubkey.from_string(acct))
+                                val = resp.value
+                                data_field = None
+                                if hasattr(val, "data"):
+                                    try:
+                                        if isinstance(val.data, (list, tuple)) and len(val.data) >= 1:
+                                            data_field = val.data[0]
+                                        else:
+                                            data_field = val.data
+                                    except Exception:
+                                        data_field = None
+
+                                if data_field:
+                                    raw_b = b64decode(data_field)
+                                    parsed = pyth_parser.parse_price_account(raw_b)
+                                    if parsed and parsed.get("price") is not None and parsed.get("expo") is not None:
+                                        try:
+                                            price_val = float(parsed["price"]) * (10 ** int(parsed["expo"]))
+                                            if price_val > 0 and price_val < 1e12:
+                                                self.set(mint, price_val)
+                                        except Exception:
+                                            pass
+                            except Exception:
+                                logger.debug("Direct pyth_parser parse failed for %s", mint)
                     except Exception:
                         logger.debug("Failed to refresh price for %s", mint)
             except Exception:
