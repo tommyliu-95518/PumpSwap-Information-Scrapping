@@ -27,7 +27,6 @@ def test_compute_volumes_sql(tmp_path):
     db_path = tmp_path / "agg.db"
     conn = init_db(str(db_path))
 
-    # Insert trades at various timestamps
     now = 1_700_000_000
     t1 = Trade(signature="S1", ts=now - 30, mint="MINTX", token_delta=2.0)
     t2 = Trade(signature="S2", ts=now - 120, mint="MINTX", token_delta=-3.0)

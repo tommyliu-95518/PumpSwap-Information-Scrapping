@@ -1,9 +1,16 @@
 {
-    "mint": "FDJ5ybDTbfC3DL9W3Dqr2e5w79MmU3pCBbYEzKhEG7La", 
-    "rpc_url": "https: //api.mainnet-beta.solana.com", 
-    "scanned_signatures": 1, 
-    "found_mint_balance_changes": 0, 
-    "age_seconds_since_first_seen_tx": "None", 
-    "volume_token": {"1m": 0.0, "5m": 0.0, "15m": 0.0, "1h": 0.0},
-    "note": "Milestone 1 MVP: volume is based on any mint balance change in these transactions and is NOT yet restricted to PumpSwap-only swaps."
+    "mint": "So11111111111111111111111111111111111111112",
+    "volumes": {
+        "1m": 0.0,
+        "5m": 0.372386707999965,
+        "15m": 0.372386707999965,
+        "1h": 0.372386707999965
+    },
+    "age_seconds": 119,
+    "supply": {
+        "raw": 0,
+        "decimals": 9,
+        "ui_amount": 0.0,
+        "ui_amount_string": "0"
+    }
 }

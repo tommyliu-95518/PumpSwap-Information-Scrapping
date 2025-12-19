@@ -2,15 +2,7 @@
 from typing import Iterable, Dict, Optional
 import time
 from parse import Trade
-
-# Common stablecoin mint addresses on Solana (treat these quote tokens as USD-equivalent)
-# Add more mints here if needed.
-STABLECOIN_MINTS = {
-    # USDC
-    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-    # USDT (commonly used)
-    "Es9vMFrzaCERmJfr4S7f1KkGm8e7c9g2p2u7r2z1r5t",
-}
+from config import STABLECOIN_MINTS
 
 WINDOWS = {
     "1m": 60,

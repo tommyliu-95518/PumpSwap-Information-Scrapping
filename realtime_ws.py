@@ -21,7 +21,10 @@ class PumpSwapSubscriber:
         self.rpc_url = rpc_url
         self.program_id = program_id
         self.client = Client(rpc_url)
-        self.indexer = InMemoryIndexer()
+        # Provide a price cache to the indexer for USD computations
+        from price_cache import PriceCache
+
+        self.indexer = InMemoryIndexer(price_cache=PriceCache(self.client))
         self.db = init_db("./trades.db")
         self._running = False
 

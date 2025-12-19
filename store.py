@@ -125,7 +125,7 @@ WINDOWS = {
 }
 
 
-def compute_volumes_sql(conn_or_path, mint: str, now_ts: Optional[int] = None, return_usd: bool = False) -> Dict[str, float] | Dict[str, Dict[str, float]]:
+def compute_volumes_sql(conn_or_path, mint: str, now_ts: Optional[int] = None, return_usd: bool = False, client=None) -> Dict[str, float] | Dict[str, Dict[str, float]]:
     """Compute rolling volumes for `mint` using SQL aggregation on stored trades.
 
     Returns dict mapping window label to sum(abs(token_delta)).
@@ -142,6 +142,21 @@ def compute_volumes_sql(conn_or_path, mint: str, now_ts: Optional[int] = None, r
     cur = conn.cursor()
     # Return token + USD volumes per window. Use stored `price` and `quote_mint`
     from metrics import STABLECOIN_MINTS
+
+    # If a client is provided, attempt to fetch a Pyth price for the mint
+    pyth_price = None
+    try:
+        if client is not None:
+            from rpc import get_price_for_mint
+
+            pyth_price = get_price_for_mint(client, mint)
+            if pyth_price is not None:
+                try:
+                    pyth_price = float(pyth_price)
+                except Exception:
+                    pyth_price = None
+    except Exception:
+        pyth_price = None
 
     for label, secs in WINDOWS.items():
         since = now - secs

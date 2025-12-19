@@ -3,11 +3,47 @@ from typing import Dict
 
 from realtime import InMemoryIndexer
 from store import compute_volumes_sql
+import logging
+from logging_config import setup_logging
+from rpc import get_client
+from price_cache import PriceCache
+from contextlib import asynccontextmanager
+
 
 app = FastAPI(title="PumpSwap Realtime Metrics")
 
-# Single global indexer instance (process-local)
+# Single global indexer instance (process-local).
+# Create indexer at import time so tests and modules can access it; the
+# optional PriceCache is attached at startup if available.
 indexer = InMemoryIndexer()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context: initialize logging, PriceCache and start background refresh."""
+    setup_logging()
+    client = get_client()
+    price_cache = PriceCache(client)
+    # Attach price_cache to existing indexer instance
+    try:
+        indexer.price_cache = price_cache
+    except Exception:
+        pass
+    # Start background refresh task
+    try:
+        await price_cache.start_background()
+    except Exception:
+        logging.getLogger(__name__).debug("PriceCache background start failed")
+    try:
+        yield
+    finally:
+        try:
+            await price_cache.stop_background()
+        except Exception:
+            pass
+
+
+app.router.lifespan_context = lifespan
 
 
 @app.get("/volumes/{mint}")

@@ -20,9 +20,12 @@ class InMemoryIndexer:
       idx.get_volumes(mint)
     """
 
-    def __init__(self):
+    def __init__(self, price_cache=None):
         # For each mint, keep deque of (ts, token_delta, quote_mint, price)
         self.store: Dict[str, Deque[Tuple[int, float, Optional[str], Optional[float]]]] = defaultdict(deque)
+        # Optional PriceCache instance used for USD computations when trades are
+        # not quoted in stablecoins.
+        self.price_cache = price_cache
 
     def _prune(self, mint: str, now_ts: Optional[int] = None) -> None:
         now = int(now_ts or time.time())
@@ -65,10 +68,25 @@ class InMemoryIndexer:
             for label, secs in WINDOWS.items():
                 if age <= secs:
                     res_token[label] += token_amt
+                    # USD computation order of preference:
+                    # 1) trade has price and quote is stablecoin -> use it
+                    # 2) otherwise, use price_cache if available for this mint
+                    usd_added = 0.0
                     if price is not None and quote_mint in STABLECOIN_MINTS:
                         try:
+                            usd_val = token_amt * abs(price)
                             res_usd[label]["token"] += token_amt
-                            res_usd[label]["usd"] += token_amt * abs(price)
+                            res_usd[label]["usd"] += usd_val
+                            usd_added = usd_val
+                        except Exception:
+                            pass
+                    if usd_added == 0.0 and self.price_cache is not None:
+                        try:
+                            p = self.price_cache.get(mint)
+                            if p is not None:
+                                usd_val = token_amt * abs(p)
+                                res_usd[label]["token"] += token_amt
+                                res_usd[label]["usd"] += usd_val
                         except Exception:
                             pass
 

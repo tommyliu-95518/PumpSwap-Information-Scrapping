@@ -1,11 +1,17 @@
 # main.py
 import argparse
 import time
+import logging
 
-from rpc import get_client, get_signatures, get_tx, get_mint_supply
+from logging_config import setup_logging
+setup_logging()
+
+from rpc import get_client, get_signatures, get_tx, get_mint_supply, get_price_for_mint
 from parse import extract_trade_from_tx, Trade
 from metrics import compute_volumes, compute_age_seconds
 from store import init_db, save_trade, compute_volumes_sql
+
+logger = logging.getLogger(__name__)
 
 
 def run_for_mint(mint: str, rpc_url: str, limit: int):
@@ -30,35 +36,32 @@ def run_for_mint(mint: str, rpc_url: str, limit: int):
                 trades.append(trade)
 
 
-    print(f"✅ Parsed trades: {len(trades)}")
+    logger.info("Parsed trades: %d", len(trades))
 
     if not trades:
-        print("No trades found for this mint in the fetched signatures.")
+        logger.info("No trades found for this mint in the fetched signatures.")
         return
 
     # ---- existing volume + age calculation ----
     # Use SQL aggregation for rolling windows (fast, avoids reprocessing)
-    volumes = compute_volumes_sql(db, mint)
+    volumes = compute_volumes_sql(db, mint, client=client)
     age_seconds = compute_age_seconds(trades)
 
-    print("📊 Volume summary (token units + USD where available):")
+    logger.info("Volume summary (token units + USD where available):")
     for window, vals in volumes.items():
         token_v = vals.get("token") if isinstance(vals, dict) else vals
         usd_v = vals.get("usd") if isinstance(vals, dict) else None
         if usd_v is not None:
-            print(f"  {window}: {token_v} tokens, ${usd_v:.2f} USD")
+            logger.info("%s: %s tokens, $%0.2f USD", window, token_v, usd_v)
         else:
-            print(f"  {window}: {token_v} tokens")
+            logger.info("%s: %s tokens", window, token_v)
 
-    print(f"⏱️ Token age (approx, from first trade): {age_seconds} seconds")
+    logger.info("Token age (approx, from first trade): %s seconds", age_seconds)
 
     # ---- NEW: mint supply ----
     supply = get_mint_supply(client, mint)
 
-    print("🪙 Mint supply:")
-    print(f"  Raw:        {supply['raw']}")
-    print(f"  Decimals:   {supply['decimals']}")
-    print(f"  UI amount:  {supply['ui_amount_string']}")
+    logger.info("Mint supply: raw=%s decimals=%s ui=%s", supply["raw"], supply["decimals"], supply["ui_amount_string"])
 
     # Attempt to compute market cap in USD using recent trades priced in stablecoins
     price_usd = None
@@ -75,11 +78,21 @@ def run_for_mint(mint: str, rpc_url: str, limit: int):
                 continue
 
     mcap_usd = None
+    # If we couldn't infer price from recent stablecoin trades, try Pyth mapping
+    if price_usd is None:
+        try:
+            pyth_price = get_price_for_mint(client, mint)
+            if pyth_price is not None:
+                price_usd = float(pyth_price)
+                logger.info("Using Pyth price for mint %s: %s", mint, price_usd)
+        except Exception:
+            logger.debug("Pyth lookup failed or not configured for mint %s", mint)
+
     if price_usd is not None:
         try:
             ui_amount = float(supply.get("ui_amount", 0.0) or 0.0)
             mcap_usd = ui_amount * price_usd
-            print(f"💰 Market cap (approx): ${mcap_usd:,.2f} USD using price ${price_usd:.6f} from recent stablecoin trade")
+            logger.info("Market cap (approx): $%0.2f USD using price %s", mcap_usd, price_usd)
         except Exception:
             mcap_usd = None
 
@@ -99,7 +112,7 @@ def main():
 
     args = parser.parse_args()
     res = run_for_mint(args.mint, args.rpc, args.limit)
-    print(res)
+    logger.info("Result: %s", res)
 
 if __name__ == "__main__":
     main()
