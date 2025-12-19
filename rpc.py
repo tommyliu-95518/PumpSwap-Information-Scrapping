@@ -10,6 +10,8 @@ import logging
 
 from logging_config import setup_logging
 from config import PYTH_PRICE_ACCOUNTS
+import pyth_parser
+from base64 import b64decode
 
 logger = logging.getLogger(__name__)
 
@@ -142,11 +144,9 @@ def get_price_from_pyth(client: Client, price_account: str) -> Optional[float]:
     try:
         # Try to import pythclient if installed
         from pythclient.pythaccounts import PriceAccount  # type: ignore
-        from base64 import b64decode
     except Exception:
         # Fall back to a lightweight pure-Python binary parser below
         PriceAccount = None
-        from base64 import b64decode
 
     try:
         resp = client.get_account_info(Pubkey.from_string(price_account))
@@ -175,8 +175,21 @@ def get_price_from_pyth(client: Client, price_account: str) -> Optional[float]:
                 price = pa.get_current_price()
                 return float(price) if price is not None else None
             except Exception:
-                # Fall through to heuristic parser
-                logger.debug("pythclient parse failed, falling back to heuristic parser")
+                # Fall through to fallback parser
+                logger.debug("pythclient parse failed, falling back to local parser")
+
+        # Try our pure-Python parser
+        try:
+            parsed = pyth_parser.parse_price_account(raw_b)
+            if parsed and parsed.get('price') is not None and parsed.get('expo') is not None:
+                try:
+                    price_val = float(parsed['price']) * (10 ** int(parsed['expo']))
+                    if price_val > 0 and price_val < 1e12:
+                        return price_val
+                except Exception:
+                    pass
+        except Exception:
+            logger.debug("Local pyth_parser parse failed")
 
         # Heuristic parser: search for plausible (price_int64, expo_int32) pairs
         # and compute price = price_int64 * 10**expo. This is best-effort.
